@@ -1,0 +1,15 @@
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+
+# VS Code Settings
+.vscode/
+
+# Python Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Specific
+.DS_Store

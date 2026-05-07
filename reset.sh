@@ -1,0 +1,1 @@
+rm *columns.csv *dbs.csv *findings.csv *mssql_hashes.csv *mssql.hash *tables.csv *users.csv *connections.csv *linked_servers.csv *psql_hashes.csv *psql.hash *emails_10.csv *mysql_hashes.csv *mysql.hash

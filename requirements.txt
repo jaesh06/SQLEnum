@@ -1,0 +1,10 @@
+# MSSQL Database Driver
+mssql-python==1.5.0
+
+# Network Protocols & SMB (for NTLM coercion)
+impacket==0.12.0
+psycopg2-binary
+pymysql
+
+# Packaging for versioning determination
+packaging

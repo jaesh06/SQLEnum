@@ -1,0 +1,40 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: pentest_mssql
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=1
+      - MSSQL_SA_PASSWORD=Password123!
+  postgres-db:
+    image: postgres:latest
+    container_name: postgres_lab
+    environment:
+      POSTGRES_USER: pentester
+      POSTGRES_PASSWORD: Password123!
+      POSTGRES_DB: corp_data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pentester -d corp_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  mysql-db:
+    image: mysql:latest
+    container_name: mysql_lab
+    environment:
+      MYSQL_ROOT_PASSWORD: Password123!
+      MYSQL_DATABASE: web_store
+      MYSQL_USER: dev_user
+      MYSQL_PASSWORD: DevPassword123!
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
