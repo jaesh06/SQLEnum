@@ -14,11 +14,11 @@ SELECT TABLE_NAME, TABLE_SCHEMA FROM {db}.INFORMATION_SCHEMA.TABLES;
 -- Get list of columns per database
 SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM {db}.INFORMATION_SCHEMA.COLUMNS;
 -- Determine if xp_cmdshell is enabled
-SELECT name, value_in_use FROM sys.configurations WHERE name = \'xp_cmdshell\';
+SELECT name, value_in_use FROM sys.configurations WHERE name = 'xp_cmdshell';
 -- Determine is current user is sysadmin
-SELECT IS_SRVROLEMEMBER(\'sysadmin\');
+SELECT IS_SRVROLEMEMBER('sysadmin');
 -- Check specific database privs
-SELECT IS_ROLEMEMBER(\'db_owner\');
+SELECT IS_ROLEMEMBER('db_owner');
 -- List all current database connections
 EXEC sp_who2;
 -- Find any linked MSSQL servers
@@ -40,24 +40,24 @@ SELECT user AS name, password AS password_hash FROM mysql.user;
 -- Get list of database users
 SELECT CONCAT( user, "@", host) AS query, account_locked FROM mysql.user;
 -- Get list of databases on the server
-SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\');
+SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
 -- Get list of tables for a specific database
-SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\');
+SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
 -- Get list of columns for a specific database
-SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA NOT IN (\'information_schema\', \'mysql\', \'performance_schema\', \'sys\');
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
 -- Determine if user has FILE permission
-SELECT CONCAT(user, \"@\", host) as User, file_priv FROM mysql.user WHERE user = SUBSTRING_INDEX(CURRENT_USER(), \'@\', 1);
--- Check for env variables that control where file out's are written
+SELECT CONCAT(user, "@", host) as User, file_priv FROM mysql.user WHERE user = SUBSTRING_INDEX(CURRENT_USER(), '@', 1);
+-- Check for env variables that control where file outs are written
 SHOW VARIABLES LIKE 'secure_file_priv';
 -- Check for system privileges
-SELECT User, Host, Super_priv, File_priv, Grant_priv FROM mysql.user WHERE user = SUBSTRING_INDEX(CURRENT_USER(), \'@\', 1) AND (Super_priv = \'Y\' OR File_priv = \'Y\' OR Grant_priv = \'Y\');
+SELECT User, Host, Super_priv, File_priv, Grant_priv FROM mysql.user WHERE user = SUBSTRING_INDEX(CURRENT_USER(), '@', 1) AND (Super_priv = 'Y' OR File_priv = 'Y' OR Grant_priv = 'Y');
 -- Check for privs per db
 SELECT 
     GRANTEE, 
     TABLE_SCHEMA, 
     PRIVILEGE_TYPE 
 FROM information_schema.SCHEMA_PRIVILEGES 
-WHERE GRANTEE = CONCAT('\\'', REPLACE(CURRENT_USER(), '@', '\\'@\\''), '\\'');
+WHERE GRANTEE = CONCAT('\'', REPLACE(CURRENT_USER(), '@', '\'@\''), '\'');
 -- Check for database connections
 SHOW FULL PROCESSLIST;
 -- Check for linked MySQL servers
@@ -77,15 +77,15 @@ SELECT version();
 -- Get user hashes
 SELECT usename AS name, passwd AS password_hash FROM pg_shadow;
 -- Get list of database users
-SELECT rolname AS username, CASE WHEN rolvaliduntil < CURRENT_TIMESTAMP THEN \'EXPIRED\' WHEN rolcanlogin = \'f\' THEN \'DISABLED\' ELSE \'ACTIVE\' END AS status FROM pg_roles WHERE rolname NOT LIKE \'pg_%\';
+SELECT rolname AS username, CASE WHEN rolvaliduntil < CURRENT_TIMESTAMP THEN 'EXPIRED' WHEN rolcanlogin = 'f' THEN 'DISABLED' ELSE 'ACTIVE' END AS status FROM pg_roles WHERE rolname NOT LIKE 'pg_%';
 -- Get list of databases on the server
 SELECT datname FROM pg_database WHERE datistemplate = false;
 -- Get list of tables for a specific database
-SELECT table_name, table_schema FROM INFORMATION_SCHEMA.TABLES WHERE table_schema NOT IN (\'information_schema\', \'pg_catalog\');
+SELECT table_name, table_schema FROM INFORMATION_SCHEMA.TABLES WHERE table_schema NOT IN ('information_schema', 'pg_catalog');
 -- Get list of columns for a specific database
-SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema NOT IN (\'information_schema\', \'pg_catalog\');
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema NOT IN ('information_schema', 'pg_catalog');
 -- Check if user can execute host commands
-SELECT ((SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER) OR pg_has_role(current_user, \'pg_execute_server_program\', \'member\')) AS has_rce_privs;
+SELECT ((SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER) OR pg_has_role(current_user, 'pg_execute_server_program', 'member')) AS has_rce_privs;
 -- Check for system admin privs
 SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER;
 -- Check for privileges per database
