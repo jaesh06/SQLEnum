@@ -11,8 +11,9 @@ RED = "\033[91m"
 RESET = "\033[0m"
 
 class MSSQLCollector(BaseCollector):
-    def __init__(self, target, user, password, skip_data, columns):
+    def __init__(self, target, port, user, password, skip_data, columns):
         self.target = target
+        self.connection = f'{target},{port}'
         self.user = user
         self.password = password
         self.skip_data = skip_data
@@ -35,15 +36,12 @@ class MSSQLCollector(BaseCollector):
         self.findings = {"columns": [], "tables": []}
         self.matches = []
 
-        os.mkdir(self.dir_name)
-
-
     def createConnection(self, database):
         # TODO: make option to specify database. This changes execution of script
         if database != '':
             database = f'Database={database};'
 
-        conn_str = f"SERVER={self.target};{database}UID={self.user};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
+        conn_str = f"SERVER={self.connection};{database}UID={self.user};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
         conn = mssql_python.connect(conn_str)
         self.cursor = conn.cursor()
     

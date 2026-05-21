@@ -9,15 +9,16 @@ RED = "\033[91m"
 RESET = "\033[0m"
 
 class PostgreSQLCollector(BaseCollector):
-    def __init__(self, target, user, password, skip_data, columns):
+    def __init__(self, target, port, user, password, skip_data, columns):
         self.target = target
+        self.port = int(port)
         self.user = user
         self.password = password
         self.skip_data = skip_data
         self.columns = columns
 
         self.type = 'psql'
-        
+
         self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
 
         self.version_query = 'SELECT version();'
@@ -34,8 +35,6 @@ class PostgreSQLCollector(BaseCollector):
         self.dbs = {}
         self.findings = {"columns": []}
         self.matches = []
-
-        os.mkdir(self.dir_name)
     
     def createConnection(self, database):
         if database == '':
@@ -43,6 +42,7 @@ class PostgreSQLCollector(BaseCollector):
 
         conn = psycopg2.connect(
             host=self.target,
+            port=self.port,
             user=self.user,
             password=self.password,
             dbname=database

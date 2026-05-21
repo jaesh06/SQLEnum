@@ -1,4 +1,5 @@
 import argparse
+import os
 from impacket import smbserver
 from collectors.base import BaseCollector
 from collectors.mssql import MSSQLCollector
@@ -10,7 +11,7 @@ YELLOW = "\033[93m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
-description = "Perform quick enum of MSSQL with valid creds"
+description = "Perform quick enumeration of MSSQL, MySQL, or PostgreSQL"
 
 parser = argparse.ArgumentParser(
     prog='sql_enum',
@@ -27,25 +28,45 @@ parser.add_argument('-t', '--target', required=True, help='Target IP or hostname
 parser.add_argument('-u', '--user', required=True, help='Database username to connect with.')
 parser.add_argument('-p', '--password', required=True, help='Database password to connect with.')
 parser.add_argument('-d', '--database', default='', help='Database to connect to.')
-parser.add_argument("-c", "--coerce", action="store_true", help="Attempt NTLM coercion via xp_dirtree")
-parser.add_argument("-L", "--local-ip", help="Your host IP (required for -r)")
+#parser.add_argument("-c", "--coerce", action="store_true", help="Attempt NTLM coercion via xp_dirtree")
+#parser.add_argument("-L", "--local-ip", help="Your host IP (required for -r)")
 parser.add_argument('--skip-data', action="store_true", help="Skips the query for one row of data per interesting column found (recommended for large databases)")
 parser.add_argument('--columns', action="store_true", help="Searches columns for interesting names instead of tables.")
-
+parser.add_argument('-q', '--query', help='Single SQL query to run against specified database (-d <database> required!)')
+parser.add_argument('-P', '--port', help='Destination port. Defaults to database default port, e.g. 1433 for MSSQL.')
 args = parser.parse_args()
 
 def main():
     match args.type:
         case "mssql":
-            conn_obj = MSSQLCollector(args.target, args.user, args.password, args.skip_data, args.columns)
+            if args.port:
+                port = args.port
+            else:
+                port = '1433'
+            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
         case "psql":
-            conn_obj = PostgreSQLCollector(args.target, args.user, args.password, args.skip_data, args.columns)
+            if args.port:
+                port = args.port
+            else:
+                port = '5432'
+            conn_obj = PostgreSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
         case "mysql":
-            conn_obj = MySQLCollector(args.target, args.user, args.password, args.skip_data, args.columns)
+            if args.port:
+                port = args.port
+            else:
+                port = '3306'
+            conn_obj = MySQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
         case _:
             print(f'{RED}{args.type} is not a valid database type.{RESET}')
             exit(1)
-    conn_obj.createConnection(args.database)
+    if args.query:
+        if args.database == '':
+            print('ERROR: \'-d <database>\' is required when using \'-q\'!')
+            raise SystemExit
+        else:
+            dbQuery(conn_obj)
+    else:
+        dbEnum(conn_obj)
 
     #  if args.coerce:
     #     if args.local_ip:
@@ -54,6 +75,14 @@ def main():
     #     else:
     #         print('Error: -L [local_ip] option is required when using -c')
     #         exit(1)
+    
+def dbQuery(conn_obj):
+    conn_obj.createConnection(args.database)
+    conn_obj.performQuery(args.query)
+
+def dbEnum(conn_obj):
+    conn_obj.createConnection(args.database)
+    os.mkdir(conn_obj.dir_name)
     print("======== Getting Database Version... ========")
     conn_obj.getVersion()
     

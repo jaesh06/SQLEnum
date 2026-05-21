@@ -26,7 +26,7 @@ class BaseCollector:
             
             else:
                 # Write results to mssql.hash for cracking, and mssql_hashes.txt for correlation
-                with open(f'{self.dir_name}/hashcat_{self.type}.hash', 'w') as f1, open(f'{self.type}_hashes.csv', 'w') as f2:
+                with open(f'{self.dir_name}/hashcat_{self.type}.hash', 'w') as f1, open(f'{self.dir_name}/{self.type}_hashes.csv', 'w') as f2:
                     f2.write("UserName,Hash\n")
                     for row in rows:
                         if isinstance(row[1], bytes):
@@ -324,3 +324,13 @@ class BaseCollector:
                             sample = 'Skipped'
                         print(f'{YELLOW}Interesting table name found:{RESET} {table} in {database}')
                         self.matches.append({"TableName": table, "Database": database, "SampleRow": sample})
+
+    def performQuery(self, query):
+        try:
+            self.cursor.execute(query)
+            rows = self.cursor.fetchall()
+
+            for row in rows:
+                print(*row, sep=',')
+        except Exception as e:
+            print(f'{RED}SQL Error: {e}{RESET}')

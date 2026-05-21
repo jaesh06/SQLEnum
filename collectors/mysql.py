@@ -10,8 +10,9 @@ RED = "\033[91m"
 RESET = "\033[0m"
 
 class MySQLCollector(BaseCollector):
-    def __init__(self, target, user, password, skip_data, columns):
+    def __init__(self, target, port, user, password, skip_data, columns):
         self.target = target
+        self.port = int(port)
         self.user = user
         self.password = password
         self.skip_data = skip_data
@@ -48,12 +49,11 @@ class MySQLCollector(BaseCollector):
         self.dbs = {}
         self.findings = {"columns": []}
         self.matches = []
-
-        os.mkdir(self.dir_name)
     
     def createConnection(self, database):
         conn = pymysql.connect(
             host=self.target,
+            port=self.port,
             user=self.user,
             password=self.password,
             database=database

@@ -27,7 +27,7 @@ python3 -m pip install -r requirements.txt
 ```bash
 python3 sql_enum.py [mssql, mysql, psql] -t <ip|hostname> -u <user> -p <password>
 ```
-Output files include:
+Output files for enumeration include:
 - columns.csv (Contains column names, and which database/table contains the column)
 - connections.csv (Contains details of current DB connections)
 - dbs.csv (Contains list of database names)
@@ -37,6 +37,22 @@ Output files include:
 - <server_type>.hash (Contains MSSQL hashes in hashcat format)
 - tables.csv (Contains table names, schema, and associated database)
 - users.csv (Contains all MSSQL users and their status)
+These files are stored within a unique directory name from where the script is run. The directory name includes the target IP, the database type, and 4 random hex characters to prevent duplicates:
+For example: `127-0-0-1_mssql_af14`
+## Examples
+To perform basic enumeration of a MSSQL server:
+```bash
+python3 sql_enum.py mssql -t 127.0.0.1 -u sa -p 'Password123!'
+```
+To perform basic enumeration of a MySQL, and of a specific database, but filter for interesting column names instead of table names:
+```bash
+python3 sql_enum.py mysql -t 127.0.0.1 -u root -p 'Password123!' --columns -d web_store
+```
+To only run a single query and perform no other enumeration ('-d' is required!):
+```bash
+python3 sql_enum.py psql -t 127.0.0.1 -u pentester -p 'Password123!' -d corp_data -q 'SELECT * FROM internal_vault.api_tokens LIMIT 10'
+```
+*Note: this outputs the results to STDOUT, not a file!*
 ## Dev Setup
 The below section details how to setup small SQL containers for testing.
 (Tested on ARM Mac)
@@ -87,7 +103,7 @@ docker-compose -f [x86.yml|arm.yml] up -d
 ```bash
 sqlcmd -S 127.0.0.1,1433 -U sa -P 'Password123!' -i data_populate_ms.sql -C
 psql -h 127.0.0.1 -U pentester -d corp_data < data_populate_postgre.sql
-mysql -h 127.0.0.1 -u root -pPentestPassword123! web_store < data_populate_my.sql
+mysql -h 127.0.0.1 -u root -p'Password123!' web_store < data_populate_my.sql
 ```
 4. Test with the following command:
 ```bash
