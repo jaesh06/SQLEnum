@@ -17,9 +17,8 @@ class PostgreSQLCollector(BaseCollector):
         self.columns = columns
 
         self.type = 'psql'
-
-        self.file_prefix = secrets.token_hex(2)
-        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{self.file_prefix}'
+        
+        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
 
         self.version_query = 'SELECT version();'
         self.hash_query = 'SELECT usename AS name, passwd AS password_hash FROM pg_shadow;'
@@ -53,7 +52,7 @@ class PostgreSQLCollector(BaseCollector):
         self.cursor = conn.cursor()
     
     def getAllTables(self):
-        with open(f'{self.dir_name}/{self.file_prefix}_tables.csv', 'w') as f:
+        with open(f'{self.dir_name}/tables.csv', 'w') as f:
             f.write("TableName,SchemaName,Database\n")
         for db in self.dbs:
             self.createConnection(db)
@@ -61,7 +60,7 @@ class PostgreSQLCollector(BaseCollector):
             self.getTables(table_query, db)
     
     def getAllColumns(self):
-        with open(f'{self.dir_name}/{self.file_prefix}_columns.csv', 'w') as f:
+        with open(f'{self.dir_name}/columns.csv', 'w') as f:
             f.write('ColumnName,TableName,Database\n')
         for db in self.dbs:
             self.createConnection(db)
@@ -81,7 +80,7 @@ class PostgreSQLCollector(BaseCollector):
         else:
             self.findings['tables'] = self.matches
 
-        with open(f'{self.dir_name}/{self.file_prefix}_findings.csv', 'a') as f:
+        with open(f'{self.dir_name}/findings.csv', 'a') as f:
             if self.columns:
                 f.write('ColumnName,TableName,Database,SampleData\n')
                 for item in self.findings['columns']:

@@ -1,10 +1,5 @@
-import mssql_python
 import argparse
-import re
-import secrets
-import threading
 from impacket import smbserver
-import time
 from collectors.base import BaseCollector
 from collectors.mssql import MSSQLCollector
 from collectors.psql import PostgreSQLCollector

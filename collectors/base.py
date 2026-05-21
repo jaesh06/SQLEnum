@@ -26,8 +26,7 @@ class BaseCollector:
             
             else:
                 # Write results to mssql.hash for cracking, and mssql_hashes.txt for correlation
-                filename = f'{self.file_prefix}_{self.type}'
-                with open(f'{self.dir_name}/{self.file_prefix}_{self.type}.hash', 'w') as f1, open(f'{self.file_prefix}_{self.type}_hashes.csv', 'w') as f2:
+                with open(f'{self.dir_name}/hashcat_{self.type}.hash', 'w') as f1, open(f'{self.type}_hashes.csv', 'w') as f2:
                     f2.write("UserName,Hash\n")
                     for row in rows:
                         if isinstance(row[1], bytes):
@@ -40,7 +39,7 @@ class BaseCollector:
                         else:
                             f1.write(f'{hash}\n')
                         f2.write(f'{username},{hash}\n')
-                print(f'Usernames and Hashes written to {self.file_prefix}_{self.type}_hashes.csv')
+                print(f'Usernames and Hashes written to {self.type}_hashes.csv')
                 # TODO: Use hash identification to get actual hash mode
                 match self.type:
                     case 'mssql':
@@ -49,7 +48,7 @@ class BaseCollector:
                         hashcat_mode = '28600'
                     case 'mysql':
                         hashcat_mode = '11200'
-                print(f'Hashcat Command:\n\nhashcat -a 0 -m {hashcat_mode} {filename}.hash wordlist.txt [rules.txt]\n')
+                print(f'Hashcat Command:\n\nhashcat -a 0 -m {hashcat_mode} hashcat_{self.type}.hash wordlist.txt [rules.txt]\n')
 
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
@@ -63,7 +62,7 @@ class BaseCollector:
 
         rows = self.cursor.fetchall()
 
-        with open(f'{self.dir_name}/{self.file_prefix}_users.csv', 'a') as f:
+        with open(f'{self.dir_name}/users.csv', 'a') as f:
             f.write('Username,is_disabled\n')
             print('Database Users | is_disabled:')
             for row in rows:
@@ -81,7 +80,7 @@ class BaseCollector:
         rows = self.cursor.fetchall()
 
         # Write dbs to dbs.txt
-        with open(f'{self.dir_name}/{self.file_prefix}_dbs.csv', 'w') as f:
+        with open(f'{self.dir_name}/dbs.csv', 'w') as f:
             f.write("Database\n")
             for row in rows:
                 try:
@@ -104,7 +103,7 @@ class BaseCollector:
             exit(1)
         rows = self.cursor.fetchall()
 
-        with open(f'{self.dir_name}/{self.file_prefix}_tables.csv', 'a') as f:
+        with open(f'{self.dir_name}/tables.csv', 'a') as f:
             for row in rows:
                 f.write(f'{row[0]},{row[1]},{database}\n')
                 table_name = f'{row[1]}.{row[0]}'
@@ -120,7 +119,7 @@ class BaseCollector:
             exit(1)
         rows = self.cursor.fetchall()
 
-        with open(f'{self.dir_name}/{self.file_prefix}_columns.csv', 'a') as f:
+        with open(f'{self.dir_name}/columns.csv', 'a') as f:
             for row in rows:
                 f.write(f'{row[0]},{row[2]},{row[3]}\n')
                 table_name = f'{row[1]}.{row[2]}'
@@ -219,7 +218,7 @@ class BaseCollector:
             rows = self.cursor.fetchall()
 
             print('Host: User')
-            with open(f'{self.dir_name}/{self.file_prefix}_connections.csv', 'a') as f:    
+            with open(f'{self.dir_name}/connections.csv', 'a') as f:    
                 for row in rows:
                     match self.type:
                         case 'mssql':
@@ -243,7 +242,7 @@ class BaseCollector:
 
             if rows:
                 print('IP Address: ServerName')
-                with open(f'{self.dir_name}/{self.file_prefix}_linked_servers.csv', 'a') as f:
+                with open(f'{self.dir_name}/linked_servers.csv', 'a') as f:
                     for row in rows:
                         match self.type:
                             case 'mssql':

