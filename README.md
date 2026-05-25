@@ -126,7 +126,7 @@ python3 sql_enum.py mssql -t 127.0.0.1 -u sa -p 'Password123!'
 - [x] Test x86 dev setup
 - [ ] Test xp_dirtree coercion
     - Currently doesn't seem to work with a container, need a VM of MSSQL to test
-- [ ] Add option to filter only for custom word[s]
+- [x] Add option to filter only for custom word[s]
 - [x] Add option to skip sample data queries in findLoot() 
 - [x] Add option to filter on table names instead of columns (good for larger databases)
 - [ ] Look into sqlmap integration

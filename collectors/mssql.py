@@ -11,13 +11,14 @@ RED = "\033[91m"
 RESET = "\033[0m"
 
 class MSSQLCollector(BaseCollector):
-    def __init__(self, target, port, user, password, skip_data, columns):
+    def __init__(self, target, port, user, password, skip_data, columns, keywords):
         self.target = target
         self.connection = f'{target},{port}'
         self.user = user
         self.password = password
         self.skip_data = skip_data
         self.columns = columns
+        self.keywords = keywords.replace(',','|')
 
         self.type = 'mssql'
 
@@ -86,7 +87,7 @@ class MSSQLCollector(BaseCollector):
     def getAllLoot(self):
         for db in self.dbs:
             self.createConnection(db)
-            self.findLoot(db)
+            self.findLoot(db, self.keywords)
         if self.columns:
             self.findings['columns'] = self.matches
         else:

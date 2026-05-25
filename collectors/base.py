@@ -260,13 +260,18 @@ class BaseCollector:
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
 
-    def findLoot(self, database):
-        patterns = {
-            "credentials": r"pass|pwd|hash|salt|shadow|secret|token|cred|psw|id|session",
-            "identity": r"user|admin|login|member|account|ssn|social.*security",
-            "financial": r"card|credit|cc_|bank|acc_|iban|routing|wallet|payment",
-            "sensitive": r"email|phone|addr|dob|birth|private|key|config"
-        }
+    def findLoot(self, database, keywords):
+        if keywords == "":
+            patterns = {
+                "credentials": r"pass|pwd|hash|salt|shadow|secret|token|cred|psw|id|session|vault",
+                "identity": r"user|admin|login|member|account|ssn|social.*security",
+                "financial": r"card|credit|cc_|bank|acc_|iban|routing|wallet|payment",
+                "sensitive": r"email|phone|addr|dob|birth|private|key|config"
+            }
+        else:
+            patterns = {
+                "custom": keywords
+            }
         if self.columns:
             for table in self.dbs[database]:
                 for column in self.dbs[database][table]:

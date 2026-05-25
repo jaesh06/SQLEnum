@@ -34,6 +34,7 @@ parser.add_argument('--skip-data', action="store_true", help="Skips the query fo
 parser.add_argument('--columns', action="store_true", help="Searches columns for interesting names instead of tables.")
 parser.add_argument('-q', '--query', help='Single SQL query to run against specified database (-d <database> required!)')
 parser.add_argument('-P', '--port', help='Destination port. Defaults to database default port, e.g. 1433 for MSSQL.')
+parser.add_argument('-f', '--filter', default='', help='Filter table/column names for comma-separated (no whitespace) keywords.')
 args = parser.parse_args()
 
 def main():
@@ -43,19 +44,19 @@ def main():
                 port = args.port
             else:
                 port = '1433'
-            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
+            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
         case "psql":
             if args.port:
                 port = args.port
             else:
                 port = '5432'
-            conn_obj = PostgreSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
+            conn_obj = PostgreSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
         case "mysql":
             if args.port:
                 port = args.port
             else:
                 port = '3306'
-            conn_obj = MySQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns)
+            conn_obj = MySQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
         case _:
             print(f'{RED}{args.type} is not a valid database type.{RESET}')
             exit(1)
@@ -81,6 +82,9 @@ def dbQuery(conn_obj):
     conn_obj.performQuery(args.query)
 
 def dbEnum(conn_obj):
+    if ' ' in args.filter:
+        print('ERROR: \'--filter\' argument cannot contain whitespace!')
+        raise SystemExit
     conn_obj.createConnection(args.database)
     os.mkdir(conn_obj.dir_name)
     print("======== Getting Database Version... ========")

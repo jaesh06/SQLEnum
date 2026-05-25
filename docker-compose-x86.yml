@@ -1,7 +1,7 @@
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: pentest_mssql
+    container_name: mssql_sqlenum
     ports:
       - "1433:1433"
     environment:
@@ -9,7 +9,7 @@ services:
       - MSSQL_SA_PASSWORD=Password123!
   postgres-db:
     image: postgres:latest
-    container_name: postgres_lab
+    container_name: psql_sqlenum
     environment:
       POSTGRES_USER: pentester
       POSTGRES_PASSWORD: Password123!
@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
   mysql-db:
     image: mysql:latest
-    container_name: mysql_lab
+    container_name: mysql_sqlenum
     environment:
       MYSQL_ROOT_PASSWORD: Password123!
       MYSQL_DATABASE: web_store
