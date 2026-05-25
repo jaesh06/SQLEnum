@@ -1,0 +1,6 @@
+ColumnName,TableName,Database
+user_id,user_flags,corp_data
+service_name,api_tokens,corp_data
+token_val,api_tokens,corp_data
+id,api_tokens,corp_data
+is_admin,user_flags,corp_data

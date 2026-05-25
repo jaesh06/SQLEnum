@@ -1,0 +1,3 @@
+TableName,SchemaName,Database
+legacy_vault,web_store,web_store
+site_sessions,web_store,web_store

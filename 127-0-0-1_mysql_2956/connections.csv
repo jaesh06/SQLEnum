@@ -1,0 +1,2 @@
+5,event_scheduler,localhost,None,Daemon,6659,Waiting on empty queue,None,
+1307,root,172.18.0.1:57756,web_store,Query,0,init,SHOW FULL PROCESSLIST,

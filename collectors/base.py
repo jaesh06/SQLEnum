@@ -84,9 +84,11 @@ class BaseCollector:
             f.write("Database\n")
             for row in rows:
                 try:
-                    # Test for user access to database
-                    #self.createConnection(row[0])
-                    self.cursor.execute(f'USE {row[0]}')
+                    # If there was a new conn for mssql, the impersonation wouldn't work
+                    if self.type == 'mssql':
+                        self.cursor.execute(f'USE {row[0]}')
+                    else:
+                        self.createConnection(row[0])
 
                     self.dbs[row[0]] = {}
                     print(f'{row[0]}')

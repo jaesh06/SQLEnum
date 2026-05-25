@@ -1,0 +1,3 @@
+TableName,Database,SampleRow
+web_store.legacy_vault,web_store,|999|b'\xde\xad\xc0\xde\xbe\xef\x137'
+web_store.site_sessions,web_store,|1|None|0
