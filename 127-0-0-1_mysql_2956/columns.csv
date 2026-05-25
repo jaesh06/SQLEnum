@@ -1,6 +1,0 @@
-ColumnName,TableName,Database
-enc_payload,legacy_vault,def
-vault_id,legacy_vault,def
-id,site_sessions,def
-is_active,site_sessions,def
-session_data,site_sessions,def

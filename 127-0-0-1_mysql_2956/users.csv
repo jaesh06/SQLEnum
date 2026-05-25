@@ -1,8 +1,0 @@
-Username,is_disabled
-dev_user@%,N
-guest_user@%,N
-root@%,N
-mysql.infoschema@localhost,Y
-mysql.session@localhost,Y
-mysql.sys@localhost,Y
-root@localhost,N
