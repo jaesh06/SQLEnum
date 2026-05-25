@@ -1,7 +1,6 @@
 import mssql_python
 import secrets
 import threading
-import os
 from impacket import smbserver
 from collectors.base import BaseCollector
 
@@ -38,7 +37,6 @@ class MSSQLCollector(BaseCollector):
         self.matches = []
 
     def createConnection(self, database):
-        # TODO: make option to specify database. This changes execution of script
         if database != '':
             database = f'Database={database};'
 

@@ -1,6 +1,5 @@
 import psycopg2
 import secrets
-import os
 from collectors.base import BaseCollector
 
 GREEN = "\033[92m"

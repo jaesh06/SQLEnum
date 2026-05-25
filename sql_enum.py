@@ -33,7 +33,7 @@ parser.add_argument('-d', '--database', default='', help='Database to connect to
 parser.add_argument('--skip-data', action="store_true", help="Skips the query for one row of data per interesting column found (recommended for large databases)")
 parser.add_argument('--columns', action="store_true", help="Searches columns for interesting names instead of tables.")
 parser.add_argument('-q', '--query', help='Single SQL query to run against specified database (-d <database> required!)')
-parser.add_argument('-P', '--port', help='Destination port. Defaults to database default port, e.g. 1433 for MSSQL.')
+parser.add_argument('-P', '--port', help='Destination port. If not specified, default server ports are used (e.g. 1433 for MSSQL)')
 parser.add_argument('-f', '--filter', default='', help='Filter table/column names for comma-separated (no whitespace) keywords.')
 args = parser.parse_args()
 

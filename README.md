@@ -13,6 +13,7 @@ SQLEnum performs the following:
 - Lists all current database connections
 - Lists any linked servers
 - (TODO) Performs xp_dirtree coercion and prints out NTLMv2 hash (MSSQL)
+Go to [queries.sql](./queries.sql) to view all queries used in `sql_enum.py`.
 ## Installation
 Activate virtual environment:
 ```bash

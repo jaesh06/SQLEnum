@@ -1,6 +1,5 @@
 import pymysql
 import secrets
-import os
 from packaging import version
 from collectors.base import BaseCollector
 
