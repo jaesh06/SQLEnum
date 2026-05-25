@@ -87,14 +87,19 @@ def dbEnum(conn_obj):
         raise SystemExit
     conn_obj.createConnection(args.database)
     os.mkdir(conn_obj.dir_name)
-    print("======== Getting Database Version... ========")
+    print("======== Getting Database Version... ========\n")
     conn_obj.getVersion()
+
+    if args.type == 'mssql':
+        # If user can impersonate 'sa', remaining queries are run as 'sa'
+        print("\n======== (MSSQL) Checking for impersonation rights... ========\n")
+        conn_obj.getImpersonation()
     
-    print("======== Gathering User Hashes... ========\n")
+    print("\n======== Gathering User Hashes... ========\n")
     conn_obj.getHashes()
 
     if args.database == '':
-        print("======== Getting Databases... ========\n")
+        print("\n======== Getting Databases... ========\n")
         # Structure for dbs is as follows:
         # {'db1': {
         #   'table1': [
@@ -110,7 +115,7 @@ def dbEnum(conn_obj):
     else:
         conn_obj.dbs[args.database] = {}
 
-    print("======== Getting Tables... ========\n")
+    print("\n======== Getting Tables... ========\n")
     conn_obj.getAllTables()
 
     print("======== Getting Columns... ========\n")
@@ -119,23 +124,23 @@ def dbEnum(conn_obj):
     print("======== Checking for host cmd exec... ========\n")
     conn_obj.checkCmdExec()
 
-    print("======== Checking if user is sysadmin... ========\n")
+    print("\n======== Checking if user is sysadmin... ========\n")
     conn_obj.checkSysPrivs()
 
-    print("======== Checking if user is dbo... ========\n")
+    print("\n======== Checking if user is dbo... ========\n")
     conn_obj.getAllDBPrivs()
 
     if args.type == 'mssql':
-        print("======== (MSSQL) Checking sysmail for sent emails... ========\n")
+        print("\n======== (MSSQL) Checking sysmail for sent emails... ========\n")
         conn_obj.checkSysmail()
     
-    print("======== Checking for database connections... ========")
+    print("\n======== Checking for database connections... ========\n")
     conn_obj.checkDBConns()
 
-    print("======== Checking for linked servers... ========")
+    print("\n======== Checking for linked servers... ========\n")
     conn_obj.checkLinkedServers()
 
-    print("======== Finding interesting columns... ========\n")
+    print("\n======== Finding interesting columns... ========\n")
     conn_obj.getAllLoot()
     
 if __name__ == "__main__":

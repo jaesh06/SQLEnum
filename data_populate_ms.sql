@@ -88,6 +88,10 @@ CREATE USER test FOR LOGIN test;
 EXEC sp_addrolemember 'db_datareader', 'test';
 GO
 
+-- Grant impersonation rights to test user
+USE master;
+GRANT IMPERSONATE ON LOGIN::sa to [test];
+
 -- This section puts fake data into databases
 -- DATABASE 1: CorporateDB
 USE CorporateDB;

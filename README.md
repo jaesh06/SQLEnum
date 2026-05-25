@@ -4,6 +4,7 @@ Have you ever been on a pentest, found valid SQL creds, and spent hours looking 
 Enter SQLEnum: a script that automatically pulls database data and configurations that can help YOU decide where to pivot next.
 ## Script Functions
 SQLEnum performs the following:
+- Checks for impersonation rights of current user (MSSQL)
 - Attempts to dump SQL user hashes
 - Pulls all database, table, and column names
 - Checks for interesting column names ('password', 'ssn', 'secret', etc.)
@@ -123,6 +124,8 @@ You should see dummy credentials returned from this
 python3 sql_enum.py mssql -t 127.0.0.1 -u sa -p 'Password123!'
 ```
 ## TODO
+- [ ] Implement Kerberos/AD authentication
+- [ ] Implement TLS/SSL authentication
 - [ ] Perform more testing in live environments to discover edge cases/bugs
 - [x] Test x86 dev setup
 - [ ] Test xp_dirtree coercion

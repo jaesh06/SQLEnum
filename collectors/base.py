@@ -85,7 +85,8 @@ class BaseCollector:
             for row in rows:
                 try:
                     # Test for user access to database
-                    self.createConnection(row[0])
+                    #self.createConnection(row[0])
+                    self.cursor.execute(f'USE {row[0]}')
 
                     self.dbs[row[0]] = {}
                     print(f'{row[0]}')
