@@ -26,8 +26,10 @@ parser.add_argument(
 )
 parser.add_argument('-t', '--target', required=True, help='Target IP or hostname of SQL server.')
 parser.add_argument('-u', '--user', required=True, help='Database username to connect with.')
-parser.add_argument('-p', '--password', required=True, help='Database password to connect with.')
-parser.add_argument('-d', '--database', default='', help='Database to connect to.')
+parser.add_argument('-p', '--password', help='Database password to connect with.')
+parser.add_argument('-H', '--hash', default='', help='NTLM hash of the user to connect with.')
+parser.add_argument('-d', '--domain', default='', help='Specify the Active Directory domain name of the user account')
+parser.add_argument('-D', '--database', default='', help='Database to connect to.')
 #parser.add_argument("-c", "--coerce", action="store_true", help="Attempt NTLM coercion via xp_dirtree")
 #parser.add_argument("-L", "--local-ip", help="Your host IP (required for -r)")
 parser.add_argument('--skip-data', action="store_true", help="Skips the query for one row of data per interesting column found (recommended for large databases)")
@@ -44,7 +46,7 @@ def main():
                 port = args.port
             else:
                 port = '1433'
-            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
+            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.hash, args.domain, args.skip_data, args.columns, args.filter)
         case "psql":
             if args.port:
                 port = args.port

@@ -1,67 +1,17 @@
-import pymssql
+import mssql_python
 import secrets
 import threading
 from impacket import smbserver
 from collectors.base import BaseCollector
-from impacket.tds import MSSQL
 
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
-class ImpacketMSSQLWrapper:
-    """Wraps an Impacket MSSQL connection to mimic a pymssql connection object."""
-    def __init__(self, mssql_instance, database):
-        self.ms_sql = mssql_instance
-        self.database = database
-
-    def cursor(self):
-        return ImpacketCursorWrapper(self.ms_sql, self.database)
-
-    def close(self):
-        self.ms_sql.disconnect()
-
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb): self.close()
-
-
-class ImpacketCursorWrapper:
-    """Mimics a pymssql cursor object using Impacket's MSSQL methods."""
-    def __init__(self, mssql_instance, database):
-        self.ms_sql = mssql_instance
-        self.database = database
-        self._rows = []
-
-    def execute(self, operation, params=None):
-        if params:
-            operation = operation % params
-        
-        # RunSQLQuery returns a list of dictionaries representing the rows
-        self._rows = self.ms_sql.RunSQLQuery(self.database, operation)
-
-    def fetchone(self):
-        if not self._rows:
-            return None
-        # Convert dictionary values to a tuple to match pymssql's behavior
-        row = self._rows.pop(0)
-        return tuple(row.values())
-
-    def fetchall(self):
-        results = [tuple(r.values()) for r in self._rows]
-        self._rows = [] # Clear internal cache
-        return results
-
-    def close(self):
-        pass
-
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb): self.close()
-
 class MSSQLCollector(BaseCollector):
-    def __init__(self, target, port, user, password, hash, domain, skip_data, columns, keywords):
+    def __init__(self, target, port, user, password, domain, skip_data, columns, keywords):
         self.target = target
-        self.port = port
         self.connection = f'{target},{port}'
         self.domain = domain
         if self.domain != '':
@@ -70,7 +20,6 @@ class MSSQLCollector(BaseCollector):
             self.domain_login = False
         self.user = user
         self.password = password
-        self.hash = f'aad3b435b51404eeaad3b435b51404ee:{hash}'
         self.skip_data = skip_data
         self.columns = columns
         self.keywords = keywords.replace(',','|')
@@ -103,41 +52,15 @@ class MSSQLCollector(BaseCollector):
         self.matches = []
 
     def createConnection(self, database):
-        pth_login = False
-        if self.domain_login and self.hash == '':
-            conn_args = {
-                'server': self.target,
-                'user': f'{self.domain}\\{self.user}',
-                'password': self.password
-            }
-        elif self.domain_login and self.hash != '':
-            pth_login = True
-            ms_sql = MSSQL(self.target, port=int(self.port))
-            if database == '':
-                database = None
-            if ms_sql.connect():
-                conn_args = {
-                    'database': database,
-                    'username': self.user,
-                    'password': '',
-                    'domain': self.domain,
-                    'hashes': self.hash,
-                    'useWindowsAuth': True
-                }
-        else:
-            conn_args = {
-                'server': self.target,
-                'user': self.user,
-                'password': self.password
-            }
         if database != '':
-            conn_args['database'] = database
-        if pth_login:
-            login = ms_sql.login(**conn_args)
-            if login:
-                conn = ImpacketMSSQLWrapper(ms_sql, database)
-        else:    
-            conn = pymssql.connect(**conn_args)
+            database = f'Database={database};'
+        if self.domain_login:
+            conn_str = f"SERVER={self.connection};{database}UID={self.user}@{self.domain};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
+            print(f'domain login for {self.user} succeeded!')
+        else:
+            print(f'local auth for {self.user}')
+            conn_str = f"SERVER={self.connection};{database}UID={self.user};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
+        conn = mssql_python.connect(conn_str)
         self.cursor = conn.cursor()
         if self.impersonate:
             self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
@@ -195,9 +118,8 @@ class MSSQLCollector(BaseCollector):
                         f.write(f'{row[0]},{row[1]},{row[2]}\n')
                 print(f'{YELLOW}10 emails written to emails_10.csv!{RESET}')
 
-        # TODO: pymssql equivalent of mssql_python.exceptions.ProgrammingError
-        except Exception as e:
-            print(f'{RED}SQL Error: {e}{RESET}')
+        except mssql_python.exceptions.ProgrammingError:
+            print(f'{RED}User does not have access to sysmail{RESET}')
 
     def getAllLoot(self):
         for db in self.dbs:
