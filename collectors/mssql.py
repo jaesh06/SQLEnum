@@ -1,7 +1,9 @@
 import mssql_python
+import re
 import secrets
 import threading
 from impacket import smbserver
+from impacket.tds import MSSQL
 from collectors.base import BaseCollector
 
 GREEN = "\033[92m"
@@ -9,12 +11,38 @@ YELLOW = "\033[93m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
+class ImpacketMSSQLCursor:
+    """Expose the small cursor interface used by collectors over Impacket TDS."""
+    def __init__(self, connection, database):
+        self.connection = connection
+        self.database = database or 'master'
+        self.rows = []
+
+    def execute(self, query):
+        use_match = re.match(r'^\s*USE\s+(?:\[([^\]]+)\]|([^\s;]+))\s*;?\s*$', query, re.IGNORECASE)
+        if use_match:
+            self.database = use_match.group(1) or use_match.group(2)
+        self.rows = self.connection.RunSQLQuery(self.database, query, tuplemode=True) or []
+
+    def fetchone(self):
+        if not self.rows:
+            return None
+        return self.rows.pop(0)
+
+    def fetchall(self):
+        rows = self.rows
+        self.rows = []
+        return rows
+
 class MSSQLCollector(BaseCollector):
-    def __init__(self, target, port, user, password, skip_data, columns, keywords):
+    def __init__(self, target, port, user, password, skip_data, columns, keywords, domain='', ntlm_hash=''):
         self.target = target
+        self.port = int(port)
         self.connection = f'{target},{port}'
         self.user = user
         self.password = password
+        self.domain = domain
+        self.hashes = self.normalizeHashes(ntlm_hash)
         self.skip_data = skip_data
         self.columns = columns
         self.keywords = keywords.replace(',','|')
@@ -46,7 +74,35 @@ class MSSQLCollector(BaseCollector):
         self.findings = {"columns": [], "tables": []}
         self.matches = []
 
+    @staticmethod
+    def normalizeHashes(ntlm_hash):
+        if not ntlm_hash:
+            return None
+        if ':' in ntlm_hash:
+            return ntlm_hash
+        return f'aad3b435b51404eeaad3b435b51404ee:{ntlm_hash}'
+
     def createConnection(self, database):
+        if self.domain:
+            db_name = database or 'master'
+            conn = MSSQL(self.target, port=self.port)
+            if not conn.connect():
+                raise ConnectionError(f'Unable to connect to MSSQL server {self.target}:{self.port}')
+            if not conn.login(
+                db_name,
+                self.user,
+                self.password or '',
+                self.domain,
+                hashes=self.hashes,
+                useWindowsAuth=True,
+            ):
+                conn.disconnect()
+                raise ConnectionError(f'Windows authentication failed for {self.domain}\\{self.user}')
+            self.cursor = ImpacketMSSQLCursor(conn, db_name)
+            if self.impersonate:
+                self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
+            return
+
         if database != '':
             database = f'Database={database};'
 

@@ -27,7 +27,7 @@ python3 -m pip install -r requirements.txt
 ```
 ## Usage
 ```bash
-python3 sql_enum.py [mssql, mysql, psql] -t <ip|hostname> -u <user> -p <password>
+python3 sql_enum.py [mssql, mysql, psql] -t <ip|hostname> -u <user> [-p <password>] [--domain <domain>] [-H <ntlm_hash>]
 ```
 Output files for enumeration include:
 - columns.csv (Contains column names, and which database/table contains the column)
@@ -45,6 +45,14 @@ For example: `127-0-0-1_mssql_af14`
 To perform basic enumeration of a MSSQL server:
 ```bash
 python3 sql_enum.py mssql -t 127.0.0.1 -u sa -p 'Password123!'
+```
+To use Active Directory credentials for MSSQL Windows authentication:
+```bash
+python3 sql_enum.py mssql -t sql01.corp.local -u pentester -p 'Password123!' --domain CORP
+```
+To use an NTLM hash for MSSQL Windows authentication:
+```bash
+python3 sql_enum.py mssql -t sql01.corp.local -u pentester --domain CORP -H aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c
 ```
 To perform basic enumeration of a MySQL, and of a specific database, but filter for interesting column names instead of table names:
 ```bash
