@@ -26,7 +26,9 @@ parser.add_argument(
 )
 parser.add_argument('-t', '--target', required=True, help='Target IP or hostname of SQL server.')
 parser.add_argument('-u', '--user', required=True, help='Database username to connect with.')
-parser.add_argument('-p', '--password', required=True, help='Database password to connect with.')
+parser.add_argument('-p', '--password', help='Database password to connect with.')
+parser.add_argument('--domain', default='', help='Active Directory domain for MSSQL Windows authentication.')
+parser.add_argument('-H', '--hash', default='', help='NTLM hash for MSSQL Windows authentication (NT or LM:NT format).')
 parser.add_argument('-d', '--database', default='', help='Database to connect to.')
 #parser.add_argument("-c", "--coerce", action="store_true", help="Attempt NTLM coercion via xp_dirtree")
 #parser.add_argument("-L", "--local-ip", help="Your host IP (required for -r)")
@@ -38,13 +40,19 @@ parser.add_argument('-f', '--filter', default='', help='Filter table/column name
 args = parser.parse_args()
 
 def main():
+    if args.hash and (args.type != 'mssql' or not args.domain):
+        parser.error('--hash requires MSSQL and --domain.')
+    if args.password is None and not args.hash:
+        parser.error('-p/--password is required unless --hash is used.')
+    if args.domain and args.type != 'mssql':
+        parser.error('--domain is only supported for MSSQL.')
     match args.type:
         case "mssql":
             if args.port:
                 port = args.port
             else:
                 port = '1433'
-            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
+            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter, domain=args.domain, ntlm_hash=args.hash)
         case "psql":
             if args.port:
                 port = args.port
@@ -78,15 +86,23 @@ def main():
     #         exit(1)
     
 def dbQuery(conn_obj):
-    conn_obj.createConnection(args.database)
+    try:
+        conn_obj.createConnection(args.database)
+    except Exception as e:
+        print(f'{RED}Connection Error: {e}{RESET}')
+        raise SystemExit(1)
     conn_obj.performQuery(args.query)
 
 def dbEnum(conn_obj):
     if ' ' in args.filter:
         print('ERROR: \'--filter\' argument cannot contain whitespace!')
         raise SystemExit
-    conn_obj.createConnection(args.database)
-    os.mkdir(conn_obj.dir_name)
+    try:
+        conn_obj.createConnection(args.database)
+    except Exception as e:
+        print(f'{RED}Connection Error: {e}{RESET}')
+        raise SystemExit(1)
+    os.makedirs(conn_obj.dir_name, exist_ok=True)
     print("======== Getting Database Version... ========\n")
     conn_obj.getVersion()
 

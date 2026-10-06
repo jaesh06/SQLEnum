@@ -20,7 +20,7 @@ class MySQLCollector(BaseCollector):
 
         self.type = 'mysql'
 
-        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
+        self.dir_name = f'results/{self.target.replace(".", "-")}_{self.type}_{secrets.token_hex(2)}'
 
         self.version_query = 'SELECT @@version;'
         # self.hash_query defined below in getVersion()
