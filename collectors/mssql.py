@@ -135,6 +135,7 @@ class MSSQLCollector(BaseCollector):
             self.cursor.execute(self.impersonation_query)
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
+            return
         rows = self.cursor.fetchall()
 
         for row in rows:
@@ -143,7 +144,7 @@ class MSSQLCollector(BaseCollector):
                 print(f'[*] All remaining queries are executed as the \'sa\' user...')
                 self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
                 self.impersonate = True
-            elif (row[0] == '') or (row[0] == ''):
+            elif (row[0] == '') or (row[0] is None):
                 print(f'{GREEN}User has no impersonation rights :({RESET}')
             else:
                 print(f'{row[0]}')

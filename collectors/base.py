@@ -75,7 +75,7 @@ class BaseCollector:
             self.cursor.execute(self.db_name_query)
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
-            exit(1)
+            return
 
         rows = self.cursor.fetchall()
 
@@ -103,7 +103,7 @@ class BaseCollector:
             self.cursor.execute(table_query)
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
-            exit(1)
+            return
         rows = self.cursor.fetchall()
 
         with open(f'{self.dir_name}/tables.csv', 'a') as f:
@@ -119,7 +119,7 @@ class BaseCollector:
             self.cursor.execute(column_query)
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
-            exit(1)
+            return
         rows = self.cursor.fetchall()
 
         with open(f'{self.dir_name}/columns.csv', 'a') as f:
@@ -263,6 +263,25 @@ class BaseCollector:
         except Exception as e:
             print(f'{RED}SQL Error: {e}{RESET}')
 
+    def quoted_table(self, table):
+        schema, name = table.split('.', 1)
+        match self.type:
+            case 'mssql':
+                return f'[{schema}].[{name}]'
+            case 'mysql':
+                return f'`{schema}`.`{name}`'
+            case 'psql':
+                return f'"{schema}"."{name}"'
+
+    def quoted_column(self, column):
+        match self.type:
+            case 'mssql':
+                return f'[{column}]'
+            case 'mysql':
+                return f'`{column}`'
+            case 'psql':
+                return f'"{column}"'
+
     def findLoot(self, database, keywords):
         if keywords == "":
             patterns = {
@@ -282,16 +301,27 @@ class BaseCollector:
                         if re.search(pattern, column, re.IGNORECASE):
                             if not self.skip_data:
                                 # Query to get data type, this is needed for the MAX() SQL function to work on 'bit' data types
+                                quoted_table = self.quoted_table(table)
+                                quoted_column = self.quoted_column(column)
+                                schema, table_name = table.split('.', 1)
                                 if self.type == 'mysql':
-                                    data_type_query = f'SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = \'{database}\' AND COLUMN_NAME = \'{column}\' AND TABLE_NAME = \'{table.split('.')[1]}\''
+                                    data_type_query = f'SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = \'{database}\' AND COLUMN_NAME = \'{column}\' AND TABLE_NAME = \'{table_name}\''
+                                elif self.type == 'psql':
+                                    data_type_query = f'SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = \'{schema}\' AND COLUMN_NAME = \'{column}\' AND TABLE_NAME = \'{table_name}\''
                                 else:
-                                    data_type_query = f'SELECT DATA_TYPE FROM {database}.INFORMATION_SCHEMA.COLUMNS WHERE COLUMN_NAME = \'{column}\' AND TABLE_NAME = \'{table.split('.')[1]}\''
-                                self.cursor.execute(data_type_query)
+                                    data_type_query = f'SELECT DATA_TYPE FROM {database}.INFORMATION_SCHEMA.COLUMNS WHERE COLUMN_NAME = \'{column}\' AND TABLE_NAME = \'{table_name}\''
+                                try:
+                                    self.cursor.execute(data_type_query)
+                                except Exception as e:
+                                    print(f'{RED}SQL Error: {e}{RESET}')
+                                    continue
                                 rows = self.cursor.fetchone()
+                                if rows is None:
+                                    continue
                                 if rows[0] in ['bit', 'boolean']:
-                                    query = f'SELECT MAX(CAST({column} AS INT)) FROM {table}'
+                                    query = f'SELECT MAX(CAST({quoted_column} AS INT)) FROM {quoted_table}'
                                 else:
-                                    query = f'SELECT MAX({column}) FROM {table}'
+                                    query = f'SELECT MAX({quoted_column}) FROM {quoted_table}'
                                 try:
                                     self.cursor.execute(query)
                                 except:
@@ -314,14 +344,15 @@ class BaseCollector:
                             column_list = ''
                             for column in self.dbs[database][table]:
                                 column_list += f'{column}, '
+                            quoted_table = self.quoted_table(table)
                             if self.type == 'mssql':
-                                data_sample = f"SELECT TOP 1 * FROM {table}"
+                                data_sample = f"SELECT TOP 1 * FROM {quoted_table}"
                                 # data_sample = f"""
-                                # SELECT TOP 1 * FROM {table} 
+                                # SELECT TOP 1 * FROM {quoted_table}
                                 # WHERE COALESCE({column_list[:-2]}) IS NOT NULL OR COALESCE({column_list[:-2]}) != ''
                                 # """
                             else:
-                                data_sample = f'SELECT * FROM {table} LIMIT 1'
+                                data_sample = f'SELECT * FROM {quoted_table} LIMIT 1'
                             self.cursor.execute(data_sample)
                             row = self.cursor.fetchone()
                             if not row:

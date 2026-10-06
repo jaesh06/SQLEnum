@@ -86,14 +86,22 @@ def main():
     #         exit(1)
     
 def dbQuery(conn_obj):
-    conn_obj.createConnection(args.database)
+    try:
+        conn_obj.createConnection(args.database)
+    except Exception as e:
+        print(f'{RED}Connection Error: {e}{RESET}')
+        raise SystemExit(1)
     conn_obj.performQuery(args.query)
 
 def dbEnum(conn_obj):
     if ' ' in args.filter:
         print('ERROR: \'--filter\' argument cannot contain whitespace!')
         raise SystemExit
-    conn_obj.createConnection(args.database)
+    try:
+        conn_obj.createConnection(args.database)
+    except Exception as e:
+        print(f'{RED}Connection Error: {e}{RESET}')
+        raise SystemExit(1)
     os.mkdir(conn_obj.dir_name)
     print("======== Getting Database Version... ========\n")
     conn_obj.getVersion()
