@@ -102,7 +102,7 @@ def dbEnum(conn_obj):
     except Exception as e:
         print(f'{RED}Connection Error: {e}{RESET}')
         raise SystemExit(1)
-    os.mkdir(conn_obj.dir_name)
+    os.makedirs(conn_obj.dir_name, exist_ok=True)
     print("======== Getting Database Version... ========\n")
     conn_obj.getVersion()
 

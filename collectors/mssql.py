@@ -49,7 +49,7 @@ class MSSQLCollector(BaseCollector):
 
         self.type = 'mssql'
 
-        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
+        self.dir_name = f'results/{self.target.replace(".", "-")}_{self.type}_{secrets.token_hex(2)}'
 
         self.impersonate = False
 

@@ -19,7 +19,7 @@ class PostgreSQLCollector(BaseCollector):
 
         self.type = 'psql'
 
-        self.dir_name = f'{self.target.replace('.', '-')}_{self.type}_{secrets.token_hex(2)}'
+        self.dir_name = f'results/{self.target.replace(".", "-")}_{self.type}_{secrets.token_hex(2)}'
 
         self.version_query = 'SELECT version();'
         self.hash_query = 'SELECT usename AS name, passwd AS password_hash FROM pg_shadow;'

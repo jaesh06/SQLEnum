@@ -39,8 +39,8 @@ Output files for enumeration include:
 - <server_type>.hash (Contains MSSQL hashes in hashcat format)
 - tables.csv (Contains table names, schema, and associated database)
 - users.csv (Contains all MSSQL users and their status)
-These files are stored within a unique directory name from where the script is run. The directory name includes the target IP, the database type, and 4 random hex characters to prevent duplicates:
-For example: `127-0-0-1_mssql_af14`
+These files are stored within a unique directory nested under `results/` from where the script is run. The directory name includes the target IP, the database type, and 4 random hex characters to prevent duplicates:
+For example: `results/127-0-0-1_mssql_af14`
 ## Examples
 To perform basic enumeration of a MSSQL server:
 ```bash
