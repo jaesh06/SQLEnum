@@ -1,4 +1,5 @@
--- List of all queries used in sql_enum:
+-- Reference queries for manual investigation. Runtime queries and bounded
+-- sampling expressions are maintained in collectors/*.py.
 
 -- MSSQL
 -- Get server version
@@ -10,9 +11,9 @@ SELECT name, is_disabled FROM sys.server_principals;
 -- Get list of databases on the server
 SELECT name FROM sys.databases WHERE database_id > 4;
 -- Get list of tables for a specific database
-SELECT TABLE_NAME, TABLE_SCHEMA FROM {db}.INFORMATION_SCHEMA.TABLES;
+SELECT TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES;
 -- Get list of columns per database
-SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM {db}.INFORMATION_SCHEMA.COLUMNS;
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS ORDER BY ORDINAL_POSITION;
 -- Determine if xp_cmdshell is enabled
 SELECT name, value_in_use FROM sys.configurations WHERE name = 'xp_cmdshell';
 -- Determine is current user is sysadmin
@@ -42,9 +43,9 @@ SELECT CONCAT( user, "@", host) AS query, account_locked FROM mysql.user;
 -- Get list of databases on the server
 SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
 -- Get list of tables for a specific database
-SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
+SELECT table_name, table_schema FROM information_schema.tables WHERE table_schema = DATABASE();
 -- Get list of columns for a specific database
-SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys');
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() ORDER BY ORDINAL_POSITION;
 -- Determine if user has FILE permission
 SELECT CONCAT(user, "@", host) as User, file_priv FROM mysql.user WHERE user = SUBSTRING_INDEX(CURRENT_USER(), '@', 1);
 -- Check for env variables that control where file outs are written
@@ -57,7 +58,8 @@ SELECT
     TABLE_SCHEMA, 
     PRIVILEGE_TYPE 
 FROM information_schema.SCHEMA_PRIVILEGES 
-WHERE GRANTEE = CONCAT('\'', REPLACE(CURRENT_USER(), '@', '\'@\''), '\'');
+WHERE GRANTEE = CONCAT(CHAR(39), REPLACE(CURRENT_USER(), '@', CONCAT(CHAR(39), '@', CHAR(39))), CHAR(39))
+AND TABLE_SCHEMA = DATABASE();
 -- Check for database connections
 SHOW FULL PROCESSLIST;
 -- Check for linked MySQL servers
@@ -83,7 +85,7 @@ SELECT datname FROM pg_database WHERE datistemplate = false;
 -- Get list of tables for a specific database
 SELECT table_name, table_schema FROM INFORMATION_SCHEMA.TABLES WHERE table_schema NOT IN ('information_schema', 'pg_catalog');
 -- Get list of columns for a specific database
-SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema NOT IN ('information_schema', 'pg_catalog');
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema NOT IN ('information_schema', 'pg_catalog') ORDER BY ordinal_position;
 -- Check if user can execute host commands
 SELECT ((SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER) OR pg_has_role(current_user, 'pg_execute_server_program', 'member')) AS has_rce_privs;
 -- Check for system admin privs

