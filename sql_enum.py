@@ -1,164 +1,121 @@
+"""Command-line entry point for scoped SQL enumeration."""
+
 import argparse
-import os
-from impacket import smbserver
-from collectors.base import BaseCollector
-from collectors.mssql import MSSQLCollector
-from collectors.psql import PostgreSQLCollector
-from collectors.mysql import MySQLCollector
+import csv
+import sys
 
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-RESET = "\033[0m"
+from rules import CONFIDENCE, load_rules
+from scan_options import CHECKS, ScanOptions
+from scanner import Scanner
 
-description = "Perform quick enumeration of MSSQL, MySQL, or PostgreSQL"
 
-parser = argparse.ArgumentParser(
-    prog='sql_enum',
-    description=description,
-    formatter_class=argparse.RawTextHelpFormatter
-)
-parser.add_argument(
-    "type", 
-    choices=["mssql", "psql", "mysql"], 
-    default="mssql", 
-    help="Database type (default: mssql)"
-)
-parser.add_argument('-t', '--target', required=True, help='Target IP or hostname of SQL server.')
-parser.add_argument('-u', '--user', required=True, help='Database username to connect with.')
-parser.add_argument('-p', '--password', help='Database password to connect with.')
-parser.add_argument('--domain', default='', help='Active Directory domain for MSSQL Windows authentication.')
-parser.add_argument('-H', '--hash', default='', help='NTLM hash for MSSQL Windows authentication (NT or LM:NT format).')
-parser.add_argument('-d', '--database', default='', help='Database to connect to.')
-#parser.add_argument("-c", "--coerce", action="store_true", help="Attempt NTLM coercion via xp_dirtree")
-#parser.add_argument("-L", "--local-ip", help="Your host IP (required for -r)")
-parser.add_argument('--skip-data', action="store_true", help="Skips the query for one row of data per interesting column found (recommended for large databases)")
-parser.add_argument('--columns', action="store_true", help="Searches columns for interesting names instead of tables.")
-parser.add_argument('-q', '--query', help='Single SQL query to run against specified database (-d <database> required!)')
-parser.add_argument('-P', '--port', help='Destination port. If not specified, default server ports are used (e.g. 1433 for MSSQL)')
-parser.add_argument('-f', '--filter', default='', help='Filter table/column names for comma-separated (no whitespace) keywords.')
-args = parser.parse_args()
+def positive_integer(value):
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError('must be a positive integer')
+    return number
 
-def main():
+
+def build_parser():
+    parser = argparse.ArgumentParser(description='Perform scoped enumeration of MSSQL, MySQL, or PostgreSQL.')
+    parser.add_argument('type', choices=['mssql', 'mysql', 'psql'])
+    parser.add_argument('-t', '--target', required=True)
+    parser.add_argument('-u', '--user', required=True)
+    parser.add_argument('-p', '--password')
+    parser.add_argument('--domain', default='', help='MSSQL Windows authentication domain.')
+    parser.add_argument('-H', '--hash', default='', help='MSSQL NTLM hash (NT or LM:NT). Requires --domain.')
+    parser.add_argument('-d', '--database', default='', help='Restrict enumeration to this database; required with -q.')
+    parser.add_argument('-P', '--port', type=positive_integer)
+    parser.add_argument('-q', '--query', help='Run one query and print CSV to stdout instead of enumerating.')
+    parser.add_argument('--skip-data', action='store_true', help='Do not sample interesting tables or columns.')
+    parser.add_argument('--columns', action='store_true', help='Report matching columns instead of tables.')
+    filters = parser.add_mutually_exclusive_group()
+    filters.add_argument('-f', '--filter', help='Comma-separated literal keywords (replaces built-in rules).')
+    filters.add_argument('--rules', help='JSON detection rule file (replaces built-in rules).')
+    parser.add_argument('--filter-mode', choices=['literal', 'regex'], default='literal',
+                        help='Interpret --filter as literal keywords or regexes (default: literal).')
+    parser.add_argument('--min-confidence', choices=list(CONFIDENCE), default='low',
+                        help='Minimum detection-rule confidence to report.')
+    parser.add_argument('--checks', help=f'Comma-separated checks or all. Choices: {", ".join(CHECKS)}.')
+    for kind in ('database', 'schema', 'table'):
+        for action in ('include', 'exclude'):
+            parser.add_argument(f'--{action}-{kind}', action='append', default=[], metavar='GLOB',
+                                help=f'{action.capitalize()} {kind} names matching a case-sensitive glob; repeatable.')
+    parser.add_argument('--connect-timeout', type=positive_integer, default=10, metavar='SECONDS')
+    parser.add_argument('--query-timeout', type=positive_integer, default=30, metavar='SECONDS')
+    parser.add_argument('--sample-rows', type=positive_integer, default=1, metavar='N')
+    parser.add_argument('--sample-bytes', type=positive_integer, default=4096, metavar='N',
+                        help='Maximum total UTF-8 sample value bytes per finding (default: 4096).')
+    parser.add_argument('--output-dir', help='Report directory; defaults to a unique directory under results/.')
+    return parser
+
+
+def parse_options(parser, args):
     if args.hash and (args.type != 'mssql' or not args.domain):
         parser.error('--hash requires MSSQL and --domain.')
     if args.password is None and not args.hash:
         parser.error('-p/--password is required unless --hash is used.')
     if args.domain and args.type != 'mssql':
         parser.error('--domain is only supported for MSSQL.')
-    match args.type:
-        case "mssql":
-            if args.port:
-                port = args.port
-            else:
-                port = '1433'
-            conn_obj = MSSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter, domain=args.domain, ntlm_hash=args.hash)
-        case "psql":
-            if args.port:
-                port = args.port
-            else:
-                port = '5432'
-            conn_obj = PostgreSQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
-        case "mysql":
-            if args.port:
-                port = args.port
-            else:
-                port = '3306'
-            conn_obj = MySQLCollector(args.target, port, args.user, args.password, args.skip_data, args.columns, args.filter)
-        case _:
-            print(f'{RED}{args.type} is not a valid database type.{RESET}')
-            exit(1)
-    if args.query:
-        if args.database == '':
-            print('ERROR: \'-d <database>\' is required when using \'-q\'!')
-            raise SystemExit
-        else:
-            dbQuery(conn_obj)
+    if args.query and not args.database:
+        parser.error('-d/--database is required with -q/--query.')
+    if args.port and args.port > 65535:
+        parser.error('--port must be between 1 and 65535.')
+    if args.connect_timeout > 31536000:
+        parser.error('--connect-timeout must not exceed 31536000 seconds.')
+    if args.filter_mode == 'regex' and args.filter is None:
+        parser.error('--filter-mode regex requires --filter.')
+    if args.checks is None:
+        checks = [check for check in CHECKS if check != 'emails' or args.type == 'mssql']
+    elif args.checks == 'all':
+        checks = list(CHECKS)
     else:
-        dbEnum(conn_obj)
-
-    #  if args.coerce:
-    #     if args.local_ip:
-    #         conn_obj.startSMBServer()
-    #         time.sleep(10)
-    #     else:
-    #         print('Error: -L [local_ip] option is required when using -c')
-    #         exit(1)
-    
-def dbQuery(conn_obj):
+        checks = list(dict.fromkeys(check.strip() for check in args.checks.split(',')))
+        if not checks or set(checks) - set(CHECKS):
+            parser.error(f'--checks must contain only: {", ".join(CHECKS)}, or all.')
     try:
-        conn_obj.createConnection(args.database)
-    except Exception as e:
-        print(f'{RED}Connection Error: {e}{RESET}')
-        raise SystemExit(1)
-    conn_obj.performQuery(args.query)
+        rules = load_rules(args.rules, args.filter, args.filter_mode)
+    except ValueError as error:
+        parser.error(str(error))
+    fields = {name: getattr(args, name) for name in ScanOptions.__dataclass_fields__ if name != 'checks'}
+    return ScanOptions(checks=checks, **fields), rules
 
-def dbEnum(conn_obj):
-    if ' ' in args.filter:
-        print('ERROR: \'--filter\' argument cannot contain whitespace!')
-        raise SystemExit
+
+def make_collector(args, options):
+    # Load only the selected driver; --help and rule validation need no drivers.
+    common = dict(target=args.target, user=args.user, password=args.password, options=options)
+    if args.type == 'mssql':
+        from collectors.mssql import MSSQLCollector
+        return MSSQLCollector(port=args.port or 1433, domain=args.domain, ntlm_hash=args.hash, **common)
+    if args.type == 'mysql':
+        from collectors.mysql import MySQLCollector
+        return MySQLCollector(port=args.port or 3306, **common)
+    from collectors.psql import PostgreSQLCollector
+    return PostgreSQLCollector(port=args.port or 5432, **common)
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    options, rules = parse_options(parser, args)
     try:
-        conn_obj.createConnection(args.database)
-    except Exception as e:
-        print(f'{RED}Connection Error: {e}{RESET}')
-        raise SystemExit(1)
-    os.makedirs(conn_obj.dir_name, exist_ok=True)
-    print("======== Getting Database Version... ========\n")
-    conn_obj.getVersion()
+        collector = make_collector(args, options)
+        if args.query:
+            try:
+                collector.createConnection(args.database)
+                writer = csv.writer(sys.stdout)
+                writer.writerows(collector.execute(args.query))
+                return 0
+            finally:
+                collector.close()
+        return Scanner(collector, options, rules, args.database, args.output_dir,
+                       args.rules or ('custom-filter' if args.filter is not None else 'built-in')).run()
+    except KeyboardInterrupt:
+        return 130
+    except Exception as error:
+        print(f'Error: {error}', file=sys.stderr)
+        return 1
 
-    if args.type == 'mssql':
-        # If user can impersonate 'sa', remaining queries are run as 'sa'
-        print("\n======== (MSSQL) Checking for impersonation rights... ========\n")
-        conn_obj.getImpersonation()
-    
-    print("\n======== Gathering User Hashes... ========\n")
-    conn_obj.getHashes()
 
-    if args.database == '':
-        print("\n======== Getting Databases... ========\n")
-        # Structure for dbs is as follows:
-        # {'db1': {
-        #   'table1': [
-        #       'col1',
-        #       'col2'
-        #       ]
-        #   }
-        # }
-        # Write CSV header
-        conn_obj.getDBs()
-        # This is to refresh the cursor back to original location
-        conn_obj.createConnection(args.database)
-    else:
-        conn_obj.dbs[args.database] = {}
-
-    print("\n======== Getting Tables... ========\n")
-    conn_obj.getAllTables()
-
-    print("======== Getting Columns... ========\n")
-    conn_obj.getAllColumns()
-
-    print("======== Checking for host cmd exec... ========\n")
-    conn_obj.checkCmdExec()
-
-    print("\n======== Checking if user is sysadmin... ========\n")
-    conn_obj.checkSysPrivs()
-
-    print("\n======== Checking if user is dbo... ========\n")
-    conn_obj.getAllDBPrivs()
-
-    if args.type == 'mssql':
-        print("\n======== (MSSQL) Checking sysmail for sent emails... ========\n")
-        conn_obj.checkSysmail()
-    
-    print("\n======== Checking for database connections... ========\n")
-    conn_obj.checkDBConns()
-
-    print("\n======== Checking for linked servers... ========\n")
-    conn_obj.checkLinkedServers()
-
-    print("\n======== Finding interesting columns... ========\n")
-    conn_obj.getAllLoot()
-    
-if __name__ == "__main__":
-    main()
-
+if __name__ == '__main__':
+    raise SystemExit(main())

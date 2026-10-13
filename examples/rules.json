@@ -1,0 +1,34 @@
+{
+  "rules": [
+    {
+      "id": "account-passwords",
+      "category": "credentials",
+      "severity": "high",
+      "confidence": "high",
+      "description": "A credential-like text column exists in an account-related table.",
+      "match": {
+        "table": "user|account|login",
+        "column": "password|passwd|pwd|secret",
+        "datatype": "char|text"
+      },
+      "exclude": {
+        "table": "(?i)^test_",
+        "column": "hint|policy|reset_required"
+      }
+    },
+    {
+      "id": "application-tokens",
+      "category": "credentials",
+      "severity": "high",
+      "confidence": "medium",
+      "description": "A text column is named like an application token or API key.",
+      "match": {
+        "column": "token|api_?key",
+        "datatype": "char|text"
+      },
+      "exclude": {
+        "column": "expires|count|enabled"
+      }
+    }
+  ]
+}
